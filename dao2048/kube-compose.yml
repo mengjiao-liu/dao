@@ -1,0 +1,129 @@
+kind: Deployment
+apiVersion: apps/v1beta1
+metadata:
+  name: daocloud-dcs-captain
+  labels:
+    app: daocloud-dcs-captain
+    io.daocloud.dce.name: daocloud-dcs-captain
+    io.daocloud.dce.app: {{ APP_NAME }}
+spec:
+  template:
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      restartPolicy: Always
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - operator: In
+                    values:
+                      - {{ DCE_HOST_NAME }}
+                    key: kubernetes.io/hostname
+      volumes:
+        - hostPath:
+            path: /var/lib/dcs
+          name: var-lib-dcs
+      containers:
+        - name: daocloud-dcs-captain
+          image: '{{ REGISTRY_ADDRESS }}/dc_pokeman/captain:{{ DCS_VERSION }}'
+          volumeMounts:
+            - mountPath: /var/lib/dcs
+              name: var-lib-dcs
+          env:
+            - name: SQLITE_PATH
+              value: /var/lib/dcs
+            - name: KUBE_HOST
+              value: 'http://127.0.0.1:18081'
+            - name: NAMESPACE
+              value: {{ NAMESPACE }}
+          imagePullPolicy: IfNotPresent
+    metadata:
+      labels:
+        app: daocloud-dcs-captain
+        io.daocloud.dce.name: daocloud-dcs-captain
+        io.daocloud.dce.app: {{ APP_NAME }}
+      name: daocloud-dcs-captain
+  selector:
+    matchLabels:
+      io.daocloud.dce.name: daocloud-dcs-captain
+
+---
+kind: Deployment
+apiVersion: apps/v1beta1
+metadata:
+  name: daocloud-dcs-admin
+  labels:
+    app: daocloud-dcs-admin
+    io.daocloud.dce.name: daocloud-dcs-admin
+    io.daocloud.dce.app: {{ APP_NAME }}
+spec:
+  replicas: 1
+  template:
+    spec:
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - operator: In
+                    values:
+                      - {{ DCE_HOST_NAME }}
+                    key: kubernetes.io/hostname
+      imagePullSecrets:
+        - name: daocloud-dcs-admin-daocloud.io
+      containers:
+        - name: daocloud-dcs-admin
+          image: '{{ RESITRY_ADDRESS }}/dc_pokeman/daocloud-admin-dashboard:{{ DCS_VERSION }}'
+          env:
+            - name: BASE_URL
+              value: 'http://{{ DCE_ADMIN_HOST_IP }}:32333'
+          imagePullPolicy: IfNotPresent
+    metadata:
+      labels:
+        app: daocloud-dcs-admin
+        io.daocloud.dce.name: daocloud-dcs-admin
+        io.daocloud.dce.app: {{ APP_NAME }}
+      name: daocloud-dcs-admin
+  selector:
+    matchLabels:
+      io.daocloud.dce.name: daocloud-dcs-admin
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: daocloud-dcs-captain
+  labels:
+    io.daocloud.dce.app: {{ APP_NAME }}
+spec:
+  selector:
+    app: daocloud-dcs-captain
+  type: NodePort
+  ports:
+    - targetPort: '2333'
+      protocol: TCP
+      port: 2333
+      name: daocloud-dcs-captain-2333
+      nodePort: 32333
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: daocloud-dcs-admin
+  labels:
+    io.daocloud.dce.app: {{ APP_NAME }}
+spec:
+  selector:
+    app: daocloud-dcs-admin
+  type: NodePort
+  ports:
+    - targetPort: '80'
+      protocol: TCP
+      port: 80
+      name: daocloud-dcs-admin-80
+      nodePort: 30080
